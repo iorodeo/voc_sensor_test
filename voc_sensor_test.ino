@@ -20,6 +20,7 @@ const uint8_t TEXT_Y_INIT = 10;
 const uint8_t TEXT_Y_INCR = 18; 
 const uint8_t FILE_NUM_DEC = 4;
 const uint32_t DISPLAY_DURATION = 5000;
+const char OUTPUT_FILE[] = "/data.txt";
 
 void updateSysDispay();
 void updateIaqDisplay();
@@ -248,8 +249,24 @@ void updateGpsDisplay() {
 }
 
 void updateLogFile() { 
-    File f = arcada.open("/data.txt", O_WRITE | O_CREAT | O_AT_END); 
+    bool fileExists = arcada.exists(OUTPUT_FILE);
+    File f = arcada.open(OUTPUT_FILE, O_WRITE | O_CREAT | O_AT_END); 
 
+    if (!fileExists) {
+        // This is the first write so add header
+        f.print("datetime, ");
+        f.print("lat, ");
+        f.print("lon, ");
+        f.print("vbat, ");
+        f.print("iaq, ");
+        f.print("siaq, ");
+        f.print("temp (F), ");
+        f.print("press (Hg), ");
+        f.print("humid (%), ");
+        f.println();
+    }
+
+    // Add datetime
     f.print(GPS.day, DEC); 
     f.print('/');
     f.print(GPS.month, DEC); 
@@ -272,22 +289,50 @@ void updateLogFile() {
     f.print(GPS.seconds, DEC); 
     f.print(", ");
 
+    // Add latitude
+    if (GPS.fix) {
+        f.print(" "); 
+        f.print(GPS.latitude, 4); 
+        f.print(GPS.lat);
+    }
+    else {
+        f.print("NA"); 
+    }
+    f.print(", ");
+
+    // Add longitude
+    if (GPS.fix) {
+        f.print(" "); 
+        f.print(GPS.longitude, 4); 
+        f.print(GPS.lon);
+    }
+    else {
+        f.print("NA"); 
+    }
+    f.print(", ");
+
+    // Add battery voltage
     float vbat = arcada.readBatterySensor();
     f.print(vbat,FILE_NUM_DEC);
     f.print(", ");
     
+    // Add IAQ value
     f.print(iaqSensor.iaq,FILE_NUM_DEC);
     f.print(", ");
 
+    // Add Static IAQ value
     f.print(iaqSensor.staticIaq,FILE_NUM_DEC);
     f.print(", ");
 
+    // Temp (F)
     f.print(convert_C_to_F(iaqSensor.temperature),FILE_NUM_DEC);
     f.print(", "); 
 
+    // Pressure (in Hg)
     f.print(convert_Pa_to_Hg(iaqSensor.pressure),FILE_NUM_DEC);
     f.print(", "); 
 
+    // Humidity (%)
     f.print(iaqSensor.humidity,FILE_NUM_DEC);
 
     f.println();
