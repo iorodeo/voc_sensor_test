@@ -19,7 +19,9 @@ enum DisplayType {SYS_DISPLAY, IAQ_DISPLAY, GPS_DISPLAY};
 const uint8_t TEXT_Y_INIT = 10; 
 const uint8_t TEXT_Y_INCR = 18; 
 const uint8_t FILE_NUM_DEC = 4;
-const uint32_t DISPLAY_DURATION = 5000;
+const uint32_t DISPLAY_CYCLE_DT = 5000;
+const uint32_t DISPLAY_CYCLE_MAX_COUNT = 3; 
+const uint8_t BACKLIGHT_BRIGHTNESS = 200;
 const char OUTPUT_FILE[] = "/data.txt";
 
 void updateSysDispay();
@@ -62,7 +64,7 @@ void setup() {
         while (1); 
     } 
     arcada.displayBegin(); 
-    arcada.setBacklight(200);
+    arcada.setBacklight(BACKLIGHT_BRIGHTNESS);
     arcada.display->fillScreen(ARCADA_BLACK); 
     arcada.display->setTextSize(1);
     arcada.display->setFont(&FreeMono9pt7b);
@@ -74,7 +76,9 @@ void setup() {
 
 void loop() {
 
-    static uint32_t lastTimer = millis();
+    static bool displayOn = true;
+    static uint8_t displayCycleCount = 0;
+    static uint32_t lastDisplayTimer = millis();
     static DisplayType currentDisplay = SYS_DISPLAY;
 
     // Read data from IAQ and GPS sensors
@@ -84,25 +88,42 @@ void loop() {
         GPS.parse(GPS.lastNMEA()); 
     }
 
+    // Get current time
     uint32_t timer = millis();
-    if (timer - lastTimer > DISPLAY_DURATION) {
-        switch (currentDisplay) {
-            case SYS_DISPLAY:
-                updateSysDisplay();
-                currentDisplay = IAQ_DISPLAY;
-                break;
-            case IAQ_DISPLAY:
-                updateIaqDisplay();
-                currentDisplay = GPS_DISPLAY;
-                break;
-            case GPS_DISPLAY:
-                updateGpsDisplay();
-                currentDisplay = SYS_DISPLAY;
-                break;
-            default:
-                break;
+
+    // Check for button press
+    uint8_t pressedButtons = arcada.readButtons();
+    if (pressedButtons & ARCADA_BUTTONMASK_A) {
+        displayOn = true;
+        displayCycleCount = 0;
+        arcada.setBacklight(BACKLIGHT_BRIGHTNESS);
+    }
+
+    if ((timer - lastDisplayTimer > DISPLAY_CYCLE_DT) && displayOn) {
+        if (displayCycleCount == DISPLAY_CYCLE_MAX_COUNT) {
+            displayOn = false;
+            arcada.setBacklight(0);
         }
-        lastTimer = timer;
+        else {
+            switch (currentDisplay) {
+                case SYS_DISPLAY:
+                    updateSysDisplay(displayCycleCount);
+                    currentDisplay = IAQ_DISPLAY;
+                    break;
+                case IAQ_DISPLAY:
+                    updateIaqDisplay();
+                    currentDisplay = GPS_DISPLAY;
+                    break;
+                case GPS_DISPLAY:
+                    updateGpsDisplay();
+                    currentDisplay = SYS_DISPLAY;
+                    displayCycleCount += 1;
+                    break;
+                default:
+                    break;
+            }
+            lastDisplayTimer = timer;
+        }
     }
 
     if (foundFS && newIaqData) {
@@ -110,7 +131,7 @@ void loop() {
     }
 }
 
-void updateSysDisplay() {
+void updateSysDisplay(uint8_t displayCycleCount) {
     uint8_t text_y_pos = TEXT_Y_INIT;
 
     arcada.display->fillRect(0, 0, 160, 128, ARCADA_BLACK);
@@ -136,6 +157,13 @@ void updateSysDisplay() {
         arcada.display->print("N");
     }
 
+    text_y_pos += TEXT_Y_INCR;
+    arcada.display->setCursor(0, text_y_pos);
+    arcada.display->print("DISP "); 
+    arcada.display->print(displayCycleCount+1); 
+    arcada.display->print("/"); 
+    arcada.display->print(DISPLAY_CYCLE_MAX_COUNT); 
+
 }
 
 void updateIaqDisplay() { 
@@ -144,7 +172,7 @@ void updateIaqDisplay() {
 
     arcada.display->fillRect(0, 0, 160, 128, ARCADA_BLACK);
     arcada.display->setTextColor(ARCADA_GREENYELLOW);
-    
+
     arcada.display->setCursor(0, text_y_pos);
     arcada.display->print("IAQ  "); 
     arcada.display->print(iaqSensor.iaq,0);
